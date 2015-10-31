@@ -672,12 +672,12 @@ public class DeviceControlActivity extends MainActivity {
         return correct_signal;
     }
 
-    public class DBHelper extends SQLiteOpenHelper {
+    public static class DBHelper extends SQLiteOpenHelper {
 
 
         private static final String LOG_TAG = "DB";
 
-        public DBHelper(Context context) {
+        public  DBHelper(Context context) {
             // конструктор суперкласса
             super(context, DB_NAME, null, 1);
         }
