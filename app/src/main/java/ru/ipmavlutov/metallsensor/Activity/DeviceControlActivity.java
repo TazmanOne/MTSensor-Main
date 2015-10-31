@@ -692,7 +692,7 @@ public class DeviceControlActivity extends MainActivity {
                     + "date numeric,"
                     + "temperature real,"
                     + "signal real,"
-                    + "super_signal real,"
+                    + "super_signal real"
                     + ");");
         }
 
