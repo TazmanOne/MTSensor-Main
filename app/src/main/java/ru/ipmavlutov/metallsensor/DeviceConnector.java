@@ -10,15 +10,10 @@ import android.util.Log;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
-import java.util.Arrays;
 import java.util.UUID;
 
 import ru.ipmavlutov.metallsensor.Activity.DeviceControlActivity;
 
-/**
- * Created by user on 05.08.2015.
- */
 public class DeviceConnector {
     private static final String TAG = "DeviceConnector";
     private static final boolean D = false;
@@ -47,6 +42,7 @@ public class DeviceConnector {
         deviceName = (deviceData.getName() == null) ? deviceData.getAddress() : deviceData.getName();
         mState = STATE_NONE;
     }
+
 
     /**
      * Запрос на соединение с устойством
@@ -150,7 +146,7 @@ public class DeviceConnector {
     // ==========================================================================
 
 
-    public void write(byte[] data) {
+    /*public void write(byte[] data) {
         ConnectedThread r;
         // Synchronize a copy of the ConnectedThread
         synchronized (this) {
@@ -161,7 +157,7 @@ public class DeviceConnector {
         // Perform the write unsynchronized
         if (data.length == 1) r.write(data[0]);
         else r.writeData(data);
-    }
+    }*/
     // ==========================================================================
 
 
@@ -200,12 +196,10 @@ public class DeviceConnector {
         private static final boolean D = false;
 
         private final BluetoothSocket mmSocket;
-        private final BluetoothDevice mmDevice;
         private final UUID uuids = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
 
         public ConnectThread(BluetoothDevice device) throws IOException {
             if (D) Log.d(TAG, "create ConnectThread");
-            mmDevice = device;
             mmSocket = device.createRfcommSocketToServiceRecord(uuids);
         }
         // ==========================================================================
@@ -266,6 +260,7 @@ public class DeviceConnector {
                 if (D) Log.e(TAG, "close() of connect socket failed", e);
             }
         }
+
         // ==========================================================================
     }
     // ==========================================================================
@@ -281,7 +276,7 @@ public class DeviceConnector {
 
         private final BluetoothSocket mmSocket;
         private final InputStream mmInStream;
-        private final OutputStream mmOutStream;
+        // private final OutputStream mmOutStream;
 
 
         public ConnectedThread(BluetoothSocket socket) {
@@ -289,90 +284,70 @@ public class DeviceConnector {
 
             mmSocket = socket;
             InputStream tmpIn = null;
-            OutputStream tmpOut = null;
+
+            //OutputStream tmpOut = null;
+
 
             // Get the BluetoothSocket input and output streams
             try {
                 tmpIn = socket.getInputStream();
-                tmpOut = socket.getOutputStream();
+                //tmpOut = socket.getOutputStream();
+
             } catch (IOException e) {
                 if (D) Log.e(TAG, "temp sockets not created", e);
             }
 
             mmInStream = tmpIn;
-            mmOutStream = tmpOut;
+            // mmOutStream = tmpOut;
+
 
         }
         // ==========================================================================
-
 
         /**
          * Основной рабочий метод - ждёт входящих команд от потока
          */
         public void run() {
             if (D) Log.i(TAG, "ConnectedThread run");
+
+
             byte[] buffer = new byte[4096];
-            byte[] tmpbuf = new byte[10];
-            int bytes = 0;
-            String s, c;
-            while (true) {
-                try {
-                    Thread.sleep(600);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-                try {
-                    //bytes=mmInStream.available();
-                    //if((bytes<10)&&(bytes>0))
-
-                        mmInStream.read(buffer);
-                        s = String.valueOf(Arrays.toString(buffer));
-                        c = String.valueOf(Arrays.toString(buffer));
-                        //Log.d(TAG, s);
-                        Log.d(TAG, c);
-
-                        if ((buffer[9] == 10) && (buffer[8] == 13))
-                        {
-                            byte[] tmp = Arrays.copyOfRange(buffer, 0, 2);
-                            byte[] sgn = Arrays.copyOfRange(buffer, 2, 4);
-                            byte[] supersgn = Arrays.copyOfRange(buffer, 4, 6);
-
-                            mHandler.obtainMessage(DeviceControlActivity.TEMPRETURE, 0, -1, tmp).sendToTarget();
-                            mHandler.obtainMessage(DeviceControlActivity.SIGNAL, 0, -1, sgn).sendToTarget();
-                            //mHandler.obtainMessage(DeviceControlActivity.SUPERSIGNAL, 0, -1, supersgn).sendToTarget();
-                        }
-
-
-
-
-                    /*String readed = new String(buffer, 0, bytes);
-                    readMessage.append(readed);
-
-                    // маркер конца команды - вернуть ответ в главный поток
-                    if (readed.contains("\n")) {
-                        mHandler.obtainMessage(DeviceControlActivity.MESSAGE_READ, bytes, -1, readMessage.toString()).sendToTarget();
-                        readMessage.setLength(0);
-                    }*/
-
-                } catch (IOException e) {
-                    e.printStackTrace();
-                    connectionLost();
-                    break;
-
+            String data = "";
+            try {
+                //noinspection InfiniteLoopStatement
+                while (true) {
+                    int n = mmInStream.read(buffer);
+                    Log.d(TAG, "n=" + n);
+                    data = String.valueOf(data) + new String(buffer, "ISO-8859-1").substring(0, n);
+                    data = (data.replaceAll("\r\n", "\r").replaceAll("\n", "\r"));
+                    Log.d(TAG, data);
+                    if (!data.contains("\r") && data.length() <= 4096) continue;
+                    if (data.contains("\r")) {
+                        mHandler.obtainMessage(DeviceControlActivity.DATA, data.lastIndexOf("\r"), -1, data.substring(0, 1 + data.lastIndexOf("\r")).getBytes("ISO-8859-1")).sendToTarget();
+                        data = (data.substring(1 + data.lastIndexOf("\r")));
+                        continue;
+                    }
+                    if (data.length() <= 4096) continue;
+                    mHandler.obtainMessage(DeviceControlActivity.DATA, data.length(), -1, data.getBytes("ISO-8859-1")).sendToTarget();
+                    data = ("");
 
                 }
+            } catch (IOException e) {
+                e.printStackTrace();
+                connectionLost();
             }
+
         }
 
 
-        // ==========================================================================
+// ==========================================================================
 
 
         /**
          * Записать кусок данных в устройство
          */
 
-        public void writeData(byte[] chunk) {
+       /* public void writeData(byte[] chunk) {
 
             try {
                 mmOutStream.write(chunk);
@@ -382,14 +357,14 @@ public class DeviceConnector {
             } catch (IOException e) {
                 if (D) Log.e(TAG, "Exception during write", e);
             }
-        }
-        // ==========================================================================
+        }*/
+// ==========================================================================
 
 
         /**
          * Записать байт
          */
-        public void write(byte command) {
+       /* public void write(byte command) {
             byte[] buffer = new byte[1];
             buffer[0] = command;
 
@@ -401,8 +376,8 @@ public class DeviceConnector {
             } catch (IOException e) {
                 if (D) Log.e(TAG, "Exception during write", e);
             }
-        }
-        // ==========================================================================
+        }*/
+// ==========================================================================
 
 
         /**
