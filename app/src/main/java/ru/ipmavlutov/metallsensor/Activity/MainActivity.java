@@ -7,7 +7,6 @@ import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
 import android.view.Menu;
 import android.view.MenuItem;
-import android.widget.TextView;
 
 import ru.ipmavlutov.metallsensor.R;
 
@@ -22,15 +21,11 @@ public abstract class MainActivity extends AppCompatActivity {
     public static final int MESSAGE_WRITE = 3;
     public static final int MESSAGE_DEVICE_NAME = 4;
     public static final int MESSAGE_TOAST = 5;
-    public static final int TEMPRETURE = 6;
-    public static final int SIGNAL = 7;
-    public static final int SUPERSIGNAL = 8;
+    public static final int DATA = 6;
+
     public static int get_temperature;
     public static double get_signal;
-
-    public TextView temptext;
-    public TextView signaltext;
-    public TextView supersigntext;
+    public static double get_super_signal;
 
     BluetoothAdapter btAdapter;
 

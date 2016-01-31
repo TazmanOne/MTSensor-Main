@@ -79,7 +79,7 @@ public class Graph extends AppCompatActivity {
             // далее я вызываю два статических метода одного из своих классов (самописный класс)))
 
             SQLiteDatabase db = BDH.getWritableDatabase();
-            c = db.query("mytable", null, null, null, null, null, null);
+            c = db.query("my_table", null, null, null, null, null, null);
             if (c.moveToFirst()) {
 
                 // определяем номера столбцов по имени в выборке

@@ -27,12 +27,11 @@ public class DeviceListActivity extends Activity {
     private static final boolean D = false;
 
     public static final String EXTRA_DEVICE_ADDRESS = "device_address";
-    public static final String DISCONNECTED = "null";
 
     private BluetoothAdapter mBtAdapter;
     private ArrayAdapter<String> mNewDevicesArrayAdapter;
-    private final Set<String> mNewDevicesSet = new HashSet<String>();
-    private final Set<String> mPairedDevicesSet = new HashSet<String>();
+    private final Set<String> mNewDevicesSet = new HashSet<>();
+    private final Set<String> mPairedDevicesSet = new HashSet<>();
 
     private ListView newDevicesListView;
     private Button scanButton;
@@ -54,8 +53,8 @@ public class DeviceListActivity extends Activity {
             }
         });
 
-        ArrayAdapter<String> pairedDevicesAdapter = new ArrayAdapter<String>(this, R.layout.device_name);
-        mNewDevicesArrayAdapter = new ArrayAdapter<String>(this, R.layout.device_name);
+        ArrayAdapter<String> pairedDevicesAdapter = new ArrayAdapter<>(this, R.layout.device_name);
+        mNewDevicesArrayAdapter = new ArrayAdapter<>(this, R.layout.device_name);
 
         ListView pairedListView = (ListView) findViewById(R.id.paired_devices);
         pairedListView.setAdapter(pairedDevicesAdapter);

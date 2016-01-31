@@ -5,6 +5,7 @@ import android.bluetooth.BluetoothDevice;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 import android.os.Build;
@@ -30,8 +31,11 @@ import java.io.IOException;
 import java.lang.ref.WeakReference;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
 import java.text.SimpleDateFormat;
+import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -43,19 +47,15 @@ import ru.ipmavlutov.metallsensor.R;
 
 public class DeviceControlActivity extends MainActivity {
     private static final String DEVICE_NAME = "DEVICE_NAME";
-    private static final String TAG = "BD";
     private static String MSG_NOT_CONNECTED;
     private static String MSG_CONNECTING;
     private static String MSG_CONNECTED;
     public String MAC_ADDRESS;
 
 
-    private String deviceName;
-
-    public TextView temptext;
-    public TextView signaltext;
-    public TextView supersigntext;
-    public TextView welcometext;
+    public TextView temperature_value;
+    public TextView signal_value;
+    public TextView super_signal_value;
 
 
     private static DeviceConnector connector;
@@ -63,28 +63,20 @@ public class DeviceControlActivity extends MainActivity {
     private boolean change_menu;
 
 
-    final String DIR_SD = "Statistic";
-    final String FILENAME_SD = "Data.txt";
     private EditText editText;
     public double Z;
-    private TextView z_result;
-    private String ztext;
-    private Button abs_btn;
+    private String p0_value;
     private TextView current_value;
-    private TextView tv;
-    private Button test_clear;
-    private Button test;
-    private StringBuilder stringBuilder;
-
-    int i;
+    private TextView test_view;
 
     DBHelper dbHelper;
     Timer tm;
     MyTimerTask myTT;
-    public String s;
-    private boolean bool_tm;
     private String DB_PATH;
     private static String DB_NAME;
+    private SharedPreferences sharedPreferences;
+    private SharedPreferences.Editor sharedPreferencesEditor;
+    private static final int PREFERENCE_MODE_PRIVATE = 0;
 
 
     @Override
@@ -98,7 +90,7 @@ public class DeviceControlActivity extends MainActivity {
         MSG_CONNECTING = getString(R.string.msg_connecting);
         MSG_CONNECTED = getString(R.string.msg_connected);
         change_menu = false;
-        DB_NAME="myDB";
+        DB_NAME = "myDB";
 
         Z = 96.0;
 
@@ -113,11 +105,9 @@ public class DeviceControlActivity extends MainActivity {
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
             DB_PATH = getBaseContext().getFilesDir().getAbsolutePath().replace("files", "databases") + File.separator;
-        }
-        else {
+        } else {
             DB_PATH = getBaseContext().getFilesDir().getPath() + getBaseContext().getPackageName() + "/databases/";
         }
-
 
 
         if (isConnected() && (savedInstanceState != null)) {
@@ -136,16 +126,16 @@ public class DeviceControlActivity extends MainActivity {
         if (connector != null) {
             connector.stop();
             connector = null;
-            deviceName = null;
         }
     }
+
     // ==========================================================================
     private void writeToSD() throws IOException {
         File sd = Environment.getExternalStorageDirectory();
 
         if (sd.canWrite()) {
             String currentDBPath = DB_NAME;
-            String backupDBPath = "backupname.db";
+            String backupDBPath = "backup_name.db";
             File currentDB = new File(DB_PATH, currentDBPath);
             File backupDB = new File(sd, backupDBPath);
 
@@ -158,6 +148,7 @@ public class DeviceControlActivity extends MainActivity {
             }
         }
     }
+
     /**
      * Список устройств для подключения
      */
@@ -202,16 +193,13 @@ public class DeviceControlActivity extends MainActivity {
             DeviceData data = new DeviceData(connectedDevice, emptyName);
             connector = new DeviceConnector(data, mHandler);
             connector.connect();
-        } catch (IllegalArgumentException e) {
-
-        } catch (IOException e) {
+        } catch (IllegalArgumentException | IOException ignored) {
 
         }
     }
 
     // ==========================================================================
     void setDeviceName(String deviceName) {
-        this.deviceName = deviceName;
         getSupportActionBar().setSubtitle(deviceName);
     }
 
@@ -234,6 +222,7 @@ public class DeviceControlActivity extends MainActivity {
     /**
      * Обработчик приёма данных от bluetooth-потока
      */
+
     public class BluetoothResponseHandler extends Handler {
 
 
@@ -241,12 +230,12 @@ public class DeviceControlActivity extends MainActivity {
 
 
         public BluetoothResponseHandler(DeviceControlActivity activity) {
-            mActivity = new WeakReference<DeviceControlActivity>(activity);
+            mActivity = new WeakReference<>(activity);
         }
 
         public void setTarget(DeviceControlActivity target) {
             mActivity.clear();
-            mActivity = new WeakReference<DeviceControlActivity>(target);
+            mActivity = new WeakReference<>(target);
         }
 
         @Override
@@ -268,14 +257,14 @@ public class DeviceControlActivity extends MainActivity {
 
                             case DeviceConnector.STATE_CONNECTED:
 
+                                assert bar != null;
                                 bar.setSubtitle(MSG_CONNECTED);
 
                                 change_activity();
-                                tm=new Timer();
-                                myTT=new MyTimerTask();
+                                tm = new Timer();
+                                myTT = new MyTimerTask();
 
-                                tm.schedule(myTT, 1000, 40000);
-
+                                tm.schedule(myTT, 3000, 1200000);
 
 
                             case DeviceConnector.STATE_CONNECTING:
@@ -284,28 +273,22 @@ public class DeviceControlActivity extends MainActivity {
                                 break;
                             case DeviceConnector.STATE_NONE:
 
-                                // assert bar != null;
+                                 assert bar != null;
                                 bar.setSubtitle(MSG_NOT_CONNECTED);
-                               if(change_menu){
-                                   myTT.cancel();
-                                   tm.cancel();
-                               }
+                                if (change_menu) {
+                                    myTT.cancel();
+                                    tm.cancel();
+                                }
                                 change_menu = false;
                                 invalidateOptionsMenu();
                                 setContentView(R.layout.activity_main);
-
-
 
 
                                 break;
 
                         }
                         break;
-                    case TEMPRETURE:
 
-                        GetTempereture(msg);
-
-                        break;
 
                     case MESSAGE_READ:
                         /*final String readMessage = (String) msg.obj;
@@ -328,64 +311,104 @@ public class DeviceControlActivity extends MainActivity {
 
 
                         break;
+                    case DATA:
+                        byte[] a = (byte[]) msg.obj;
+                        if (a.length == 9) {
+                            byte[] temperature = Arrays.copyOfRange(a, 0, 2);//[0,1]
+                            byte[] signal = Arrays.copyOfRange(a, 2, 4);//[2,3]
+                            byte[] super_signal = Arrays.copyOfRange(a, 4, 6);//[4,5]
+                            //FF=[6,7],/r/n=[8,9]
 
-                    case SIGNAL:
-                        GetSignal(msg);
-                        break;
-                    case SUPERSIGNAL:
-                        GetSuperSignal(msg);
-                        break;
+                            //температура датчика
+                            int temperature_result = FindTemperature(GetTemperature(temperature));
+                            temperature_value.setText(String.valueOf(temperature_result) + "  " + "\u00b0" + "C");
+                            get_temperature = temperature_result;
 
+                            //значение сигнала
+                            double signal_result = FindRudeSignal(Correction(GetSignal(signal), temperature_result), Z);
+                            signal_value.setText(Double.toString(signal_result) + " " + "мг");
+                            get_signal = signal_result;
+
+                            //значение супер сигнала
+                            double super_signal_result = FindSuperSignal(Correction(GetSuperSignal(super_signal), temperature_result), Z);
+                            super_signal_value.setText(Double.toString(super_signal_result) + " " + "мг");
+                            get_super_signal = super_signal_result;
+                            break;
+
+                        }
                 }
             }
         }
 
+
         private void change_activity() {
             setContentView(R.layout.activity_work);
-            temptext = (TextView) findViewById(R.id.textView4);
-            signaltext = (TextView) findViewById(R.id.textView2);
-            supersigntext = (TextView) findViewById(R.id.textView6);
+            sharedPreferences = getPreferences(PREFERENCE_MODE_PRIVATE);
+            Z = sharedPreferences.getFloat("Z", (float) Z);
+
+
+
+
+
+            temperature_value = (TextView) findViewById(R.id.temperature_value);
+            signal_value = (TextView) findViewById(R.id.signal_value);
             editText = (EditText) findViewById(R.id.editText);
-            abs_btn = (Button) findViewById(R.id.abs_button);
-            current_value = (TextView) findViewById(R.id.textView9);
-            current_value.setText(Double.toString(Z));
-            tv = (TextView) findViewById(R.id.textView10);
-            tv.setMovementMethod(new ScrollingMovementMethod());
-            test = (Button) findViewById(R.id.test_btn);
-            test_clear = (Button) findViewById(R.id.test_clear_btn);
+            Button abs_btn = (Button) findViewById(R.id.setabsolute_btn);
+
+            super_signal_value = (TextView) findViewById(R.id.textView6);
+
+            current_value = (TextView) findViewById(R.id.currentvalue_value);
+
+            if (Z == 0.0) {
+                Z=96.0;
+                current_value.setText(Double.toString(Z));
+
+            } else {
+                current_value.setText(Double.toString(Z));
+            }
+
+
+            test_view = (TextView) findViewById(R.id.test_view);
+            test_view.setMovementMethod(new ScrollingMovementMethod());
+            Button test_btn = (Button) findViewById(R.id.test_btn);
+            Button test_clear = (Button) findViewById(R.id.test_clear_btn);
 
 
             View.OnClickListener abs_click = new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
+                    sharedPreferences = getPreferences(PREFERENCE_MODE_PRIVATE);
+                    sharedPreferencesEditor = sharedPreferences.edit();
                     switch (v.getId()) {
-                        case R.id.abs_button:
-                            ztext = editText.getText().toString();
+                        case R.id.setabsolute_btn:
+                            p0_value = editText.getText().toString();
 
-                            if (ztext == null || ztext.isEmpty()) {
-                                Z = 96.0;
+                            if (p0_value.isEmpty()) {
+                                Z = sharedPreferences.getFloat("Z", (float) Z);
+
                                 current_value.setText(Double.toString(Z));
                             } else {
-                                Z = Double.parseDouble(ztext);
+                                Z = Double.parseDouble(p0_value);
                                 current_value.setText(Double.toString(Z));
+                                sharedPreferencesEditor.putFloat("Z", (float) Z);
                             }
                             break;
                         case R.id.test_btn:
                             test1();
                             break;
                         case R.id.test_clear_btn:
-                            tv.setText("");
+                            test_view.setText("");
                             break;
 
                     }
-
+                    sharedPreferencesEditor.apply();
                 }
             };
             abs_btn.setOnClickListener(abs_click);
-            test.setOnClickListener(abs_click);
+            test_btn.setOnClickListener(abs_click);
             test_clear.setOnClickListener(abs_click);
 
-            z_result = (TextView) findViewById(R.id.textView7);
+            TextView z_result = (TextView) findViewById(R.id.absolute_label);
 
 
             change_menu = true;
@@ -395,147 +418,35 @@ public class DeviceControlActivity extends MainActivity {
 
         }
 
-        private void GetSuperSignal(Message msg) {
-            byte[] supsignBuf = (byte[]) msg.obj;
-            int x2, y2;
-            int _x2;
-            x2 = supsignBuf[0];
-
-            y2 = supsignBuf[1];
-
-            if (x2 == 0) {
-                if (y2 < 0) {
-                    _x2 = 255 + y2;
-                    double supersignalshow = FindSuperSignal(_x2);
-                    supersigntext.setText(String.valueOf(supersignalshow) + " мг");
-
-                    return;
-                }
-                if (y2 >= 0) {
-                    x2 = x2 << 8;
-                    _x2 = x2 + y2;
-                    double supersignalshow = FindSuperSignal(_x2);
-                    supersigntext.setText(String.valueOf(supersignalshow) + " мг");
-
-                    return;
-
-                }
-
-            }
-            if (x2 > 0) {
-                if (y2 < 0) {
-                    x2 = x2 << 8;
-                    y2 = 255 + y2;
-                    _x2 = x2 + y2;
-                    double supersignalshow = FindSuperSignal(_x2);
-                    supersigntext.setText(String.valueOf(supersignalshow) + " мг");
-
-                    return;
-                }
-                if (y2 >= 0) {
-                    x2 = x2 << 8;
-                    _x2 = x2 + y2;
-                    double supersignalshow = FindSuperSignal(_x2);
-                    supersigntext.setText(String.valueOf(supersignalshow) + " мг");
-
-                }
-            }
+        private double GetSuperSignal(byte[] super_signal_array) {
+            double super_signal;
+            ByteBuffer bb = ByteBuffer.allocate(2);
+            bb.order(ByteOrder.BIG_ENDIAN);
+            bb.put(super_signal_array[0]);
+            bb.put(super_signal_array[1]);
+            super_signal = bb.getShort(0);
+            return super_signal;
         }
 
-        private void GetSignal(Message msg) {
-            byte[] signBuf = (byte[]) msg.obj;
-            int x1, y1, _x1;// _y1;
-            double signalshow = 0;
-            x1 = signBuf[0];
-            //_x1 = x1;
-            y1 = signBuf[1];
-            //_y1 = y1;
-            if (x1 == 0) {
-                if (y1 < 0) {
-                    _x1 = 255 + y1;
-                    //формула
-                     signalshow = FindRudeSignal(Correction(_x1));
-                    signaltext.setText(String.valueOf(signalshow) + " мг");
-
-
-
-                }
-                if (y1 >= 0) {
-                    x1 = x1 << 8;
-                    _x1 = x1 + y1;
-                     signalshow = FindRudeSignal(Correction(_x1));
-                    signaltext.setText(String.valueOf(signalshow) + " мг");
-
-
-
-                }
-
-            }
-            if (x1 > 0) {
-                if (y1 < 0) {
-                    x1 = x1 << 8;
-                    y1 = 255 + y1;
-                    _x1 = x1 + y1;
-                     signalshow = FindRudeSignal(Correction(_x1));
-                    signaltext.setText(String.valueOf(signalshow) + " мг");
-
-                }
-                if (y1 >= 0) {
-                    x1 = x1 << 8;
-                    _x1 = x1 + y1;
-                     signalshow = FindRudeSignal(Correction(_x1));
-                    signaltext.setText(String.valueOf(signalshow) + " мг");
-
-                }
-            }
-            get_signal=signalshow;
-
+        private double GetSignal(byte[] signal_array) {
+            double signal;
+            ByteBuffer bb = ByteBuffer.allocate(2);
+            bb.order(ByteOrder.BIG_ENDIAN);
+            bb.put(signal_array[0]);
+            bb.put(signal_array[1]);
+            signal = bb.getShort(0);
+            return signal;
         }
 
-        private void GetTempereture(Message msg) {
-            byte[] tempBuf = (byte[]) msg.obj;
-//                        welcometext.setText("SDA");
-            int x, y, _x1, tempreture = 0;
-            x = tempBuf[0];
-            y = tempBuf[1];
-            if (x == 0) {
-                if (y < 0) {
-                    y = 255 + y;
-                     tempreture = FindTemperature(y);
-                    temptext.setText(String.valueOf(tempreture) + "  " + "\u00b0" + "C");
-
-                }
-                if (y > 0) {
-                     tempreture = FindTemperature(y);
-                    temptext.setText(String.valueOf(tempreture) + "  " + "\u00b0" + "C");
-                }
-
-            }
-            if (x == 1) {
-                if (y < 0) {
-                    x = x << 8;
-                    y = 255 + y;
-                    _x1 = x + y;
-                     tempreture = FindTemperature(_x1);
-                    temptext.setText(String.valueOf(tempreture) + "  " + "\u00b0" + "C");
-
-                }
-                if (y >= 0) {
-                    x = x << 8;
-                    x = x + y;
-                     tempreture = FindTemperature(x);
-                    temptext.setText(String.valueOf(tempreture) + "  " + "\u00b0" + "C");
-                }
-            }
-                get_temperature=tempreture;
-            //s = String.valueOf(get_temperature);
-            //Log.d("TAG", s);
+        private short GetTemperature(byte[] temperature_array) {
+            short temperature;
+            ByteBuffer bb = ByteBuffer.allocate(2);
+            bb.order(ByteOrder.BIG_ENDIAN);
+            bb.put(temperature_array[0]);
+            bb.put(temperature_array[1]);
+            temperature = bb.getShort(0);
+            return temperature;
         }
-
-
-        //SQLiteOpenHelper dbHelper;
-
-
     }
 
 
@@ -607,10 +518,7 @@ public class DeviceControlActivity extends MainActivity {
         } else {
             return (thermo + 54);
         }
-
-        while
-                ((temperature_code[index--]) < thermo) ;
-
+        while((temperature_code[index--]) < thermo);
         temperature = ((index) - 39);
         return temperature;
     }
@@ -624,7 +532,7 @@ public class DeviceControlActivity extends MainActivity {
     double dp;
     double result;
 
-    public double FindRudeSignal(double P) {
+    public double FindRudeSignal(double P,double Z) {
 
         dp = P - Z;//104
         if (dp < 3) {
@@ -657,12 +565,12 @@ public class DeviceControlActivity extends MainActivity {
      * ***************SuperSignal*****************************************
      */
 
-    final int SP0 = 533;
+   // final int SP0 = 533;
     double super_result;
 
-    public double FindSuperSignal(int P) {
+    public double FindSuperSignal(double P,double Z) {
 
-        dp = Math.abs(SP0 - P);
+        dp = P-Z;
         if (dp < 85) {
             m = 0;
         } else {
@@ -691,7 +599,7 @@ public class DeviceControlActivity extends MainActivity {
     /**
      * ***************Correction*****************************************
      */
-    public double Correction(double P) {
+    public double Correction(double P, int temperature) {
         double correction;
         if (temperature < 76) {
             correction = 0.45 * temperature - 11.25;
@@ -717,12 +625,13 @@ public class DeviceControlActivity extends MainActivity {
 
     }
 
+
     public void test1() {
         int P = 0, T = 0;
         double test_var = 0.0;
 
-        stringBuilder = new StringBuilder();
-        int test_tempreture[] = {
+        StringBuilder stringBuilder = new StringBuilder();
+        int test_temperature[] = {
                 100, 98, 89, 84, 76, 74, 71, 69, 68, 66, 64, 60, 58, 55, 52, 50,
                 47, 44, 42, 40, 39, 37, 31, 27, 25, 23, 21, 19, 17, 15, 12, 10,
                 8, 5, 3, 1, -2, -5, -7, -9, -11, -12, -15, -18, -20};
@@ -732,15 +641,15 @@ public class DeviceControlActivity extends MainActivity {
                 93, 92, 91, 90, 89, 88, 87, 86, 85, 84, 83, 82, 81, 80, 79, 78, 77,
                 76};
         for (int i = 0; i < 45; i++) {
-            T = test_tempreture[i];
+            T = test_temperature[i];
             P = test_signal[i];
-            test_var = FindRudeSignal(test_correction(P, T));
+            test_var = FindRudeSignal(test_correction(P, T),Z);
             double test_var1 = test_var_corr;
 
-            stringBuilder.append("T=").append(test_tempreture[i]).append("; S=").append(test_signal[i]).append("; C=").append(test_var1).append("; SC=").append(test_var).append("\n");
+            stringBuilder.append("T=").append(test_temperature[i]).append("; S=").append(test_signal[i]).append("; C=").append(test_var1).append("; SC=").append(test_var).append("\n");
 
         }
-        tv.setText(stringBuilder);
+        test_view.setText(stringBuilder);
 
 
     }
@@ -768,7 +677,7 @@ public class DeviceControlActivity extends MainActivity {
 
         private static final String LOG_TAG = "DB";
 
-        public DBHelper(Context context) {
+        public  DBHelper(Context context) {
             // конструктор суперкласса
             super(context, DB_NAME, null, 1);
         }
@@ -778,11 +687,13 @@ public class DeviceControlActivity extends MainActivity {
             Log.d(LOG_TAG, "--- onCreate database ---");
             // создаем таблицу с полями
 
-        db.execSQL("create table mytable ("
-                + "id integer primary key autoincrement,"
-                + "date numeric,"
-                + "signal real,"
-                + "temperature real" + ");");
+            db.execSQL("create table my_table ("
+                    + "id integer primary key autoincrement,"
+                    + "date numeric,"
+                    + "temperature real,"
+                    + "signal real,"
+                    + "super_signal real"
+                    + ");");
         }
 
         @Override
@@ -800,23 +711,24 @@ public class DeviceControlActivity extends MainActivity {
         @Override
         public void run() {
             SQLiteDatabase db = dbHelper.getWritableDatabase();
-            Log.d(LOG_TAG, "--- Insert in mytable: ---");
+            Log.d(LOG_TAG, "--- Insert in my_table: ---");
             // подготовим данные для вставки в виде пар: наименование столбца - значение
             ContentValues cv = new ContentValues();
 
             cv.put("date", new SimpleDateFormat("dd:MM:yyyy HH:mm").format(Calendar.getInstance().getTime()));
-            cv.put("signal", DeviceControlActivity.get_signal);
             cv.put("temperature", DeviceControlActivity.get_temperature);
+            cv.put("signal", DeviceControlActivity.get_signal);
+            cv.put("super_signal", DeviceControlActivity.get_super_signal);
             // вставляем запись и получаем ее ID
-            long rowID = db.insert("mytable", null, cv);
+            long rowID = db.insert("my_table", null, cv);
             Log.d(LOG_TAG, "row inserted, ID = " + rowID + " " + cv);
 
         }
 
     }
-
-
 }
+
+
 
 
 
